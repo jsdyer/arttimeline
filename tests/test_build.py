@@ -5,7 +5,7 @@ import sys
 import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from build import ROOT, build, metadata
+from build import ROOT, build, metadata, validate_collection
 
 
 class BuildTests(unittest.TestCase):
@@ -47,6 +47,41 @@ class BuildTests(unittest.TestCase):
                 self.assertEqual('/assets/tool-metrics.js' in page, enabled)
                 self.assertEqual(f'https://coolcode.ca/report/?tool={slug}' in page, enabled)
                 self.assertNotIn("{{", page)
+
+    def test_opening_collection_can_expand_without_a_fixed_count(self):
+        path = self.root / "web/data/collection.json"
+        data = json.loads(path.read_text())
+        previous = len(data["records"])
+        item = dict(data["records"][0])
+        item.update(id=999999, key="met:999999")
+        data["records"].append(item)
+        path.write_text(json.dumps(data))
+        self.assertEqual(len(validate_collection(self.root)["records"]), previous + 1)
+
+    def test_image_without_public_domain_permission_is_rejected(self):
+        path = self.root / "web/data/collection.json"
+        data = json.loads(path.read_text())
+        record = next(r for r in data["records"] if r["image"])
+        record["publicDomain"] = False
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "public-domain"):
+            build(self.root)
+
+    def test_invalid_paging_and_duplicate_identity_are_rejected(self):
+        path = self.root / "web/config.json"
+        config = json.loads(path.read_text())
+        config["pageSize"] = 0
+        path.write_text(json.dumps(config))
+        with self.assertRaisesRegex(ValueError, "pageSize"):
+            validate_collection(self.root)
+        config["pageSize"] = 12
+        path.write_text(json.dumps(config))
+        path = self.root / "web/data/collection.json"
+        data = json.loads(path.read_text())
+        data["records"].append(data["records"][0])
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            validate_collection(self.root)
 
     def test_url_matches_tool_id(self):
         self.edit(url="/different/")

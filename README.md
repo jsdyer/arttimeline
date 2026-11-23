@@ -1,116 +1,64 @@
-# CoolCode browser tool template
+# Art Timeline
 
-A starting point for independent tools at `coolcode.ca/<repo>/`: a working local-text
-example, responsive UI, Python standard-library build, Node tests, PR checks and Pages
-publication. No npm install is needed.
+A browser collection explorer for [CoolCode](https://coolcode.ca/), using The Metropolitan Museum of Art and Art Institute of Chicago's public collection data.
 
-## Using the example
+Search for an artist, place or subject; page through the museums' results; filter the loaded works by material, place, museum and overlapping date range; and compare any two works with their original records and credits. Download the visible records as CSV or the comparison as JSON. No account or key is needed.
 
 <!-- coolcode:guide -->
-The first occurrence of each trimmed line keeps its place. Compare the output with the original text before copying the result.
+Search either museum with your own terms, then refine the loaded works and compare two objects with their original date labels and credits. The opening collection and search presets are editable in web/config.json; they do not limit live searches.
 <!-- /coolcode:guide -->
 
-For a real tool, replace this paragraph with one or two plain-text sentences
-about an example, a limit or how to interpret the results. Keep the source,
-coverage, refresh behaviour and a worked example in this README as appropriate.
-When updating a tool, revise any details its behaviour has changed and keep the
-homepage's shorter data-source sentence in `tool.json` accurate.
-The hub imports the marked note into the catalogue README.
+## Try it
 
-## One-time template setup
+1. The opening collection loads immediately from a dated bundled snapshot.
+2. Type any term such as `moonlight` or `Japanese prints` and choose one or both museums. Search fetches actual museum API records.
+3. **Load next museum results** expands the current result set. Filters and the timeline describe loaded records only, not the entire museum collection.
+4. Refine by artist/material/place, choose a museum, and optionally enter years. Negative years mean BCE. Date ranges match when they overlap your selected years.
+5. Use **Inspect work** for its metadata and source, or **Compare** on two works. Adding a third replaces the oldest selection. Exports remain local.
 
-Enable **Settings → General → Template repository** here. This repository does not
-need Pages enabled: its workflow builds/tests but intentionally skips deployment.
-New copies also skip deployment until `scripts/init.py` sets the tool ID to match
-their repository name. This lets you create the repo before configuring Pages.
+## Expand or customize
 
-## Start a new tool
+Edit [`web/config.json`](web/config.json), which is copied into the published site:
 
-1. Select **Use this template → Create a new repository**, choose owner `jsdyer`,
-   a unique lowercase name such as `my-tool`, and public visibility.
-2. Clone the new repository. Use Python 3.12+ and Node 24+.
-3. Set the identity, using a slug that matches the repository name:
+- `presets`: any number of suggested searches. For example, append `"early photography"` to add a button.
+- `defaultQuery`: the text initially shown in the search box. Visitors can always replace it.
+- `pageSize`: records requested from each museum per click, 1–100. Default 12 keeps Met detail requests modest. Museum pagination ceilings still apply.
+- `baseline.metObjectIds` and `baseline.aicObjectIds`: any number of valid numeric museum artwork IDs for the opening collection. For example, add `359362` to the Met array and run the refresh. Nothing in the gallery or validation requires a particular number of works.
+- `requestTimeoutMs`, `metDetailDelayMs`, and `aicUserAgent`: request settings and a public collector contact string (not a secret).
 
-```sh
-python3 scripts/init.py my-tool --title "My Tool" --description "Describe what this tool does."
-```
+Changing presets or page size needs only a normal commit/push to `main`; GitHub Actions checks and publishes it. Changing opening artwork IDs also requires **Actions → Art Timeline · Check and publish → Run workflow → Refresh the opening collection**. That reads the latest config and commits/publishes a validated replacement. Alternatively run `node scripts/refresh.mjs`, review the changed `web/data/collection.json`, and commit it together with the config. A failure leaves the previous collection intact.
 
-Review the category, tags and icon in `tool.json`. `access: "browser"` tells the main
-catalogue that the tool works immediately without installation. `--owner` supports a different
-GitHub owner, but only projects owned by `jsdyer` inherit the CoolCode domain.
+There is no automatic refresh schedule: artwork metadata is relatively stable, and live search already requests current records. The manual collection refresh is explicit. Its capture time is retrieval time, not the object's creation date or museum update time.
 
-4. Replace the example in `web/` and its tests. Update the privacy explanation,
-   source attribution and README to describe the real tool.
-5. Test and preview:
+Adding another museum requires a provider adapter in `web/model.mjs` / `web/app.mjs`, because museums have different schemas and rights fields. Defaults, queries, IDs and supported page sizes need no application-code changes.
+
+## Sources, reuse and coverage
+
+- [The Met Collection API](https://metmuseum.github.io/) supplies object metadata and images explicitly marked `isPublicDomain: true`. Uses the current `/public/collection/v1.1/search` endpoint and preserves object date labels. Search returns object IDs, requiring individual detail requests; one failed detail is reported instead of destroying the whole search.
+- [Art Institute of Chicago API](https://api.artic.edu/docs/) supplies collection metadata, public-domain flags and IIIF image identifiers. The app asks for selected fields. The collector sends the museum's requested `AIC-User-Agent` contact header; browser searches use an ordinary credential-free CORS GET because the optional header triggers a preflight currently challenged by the museum's edge service. The Chicago query requires the search words to match catalogue fields as well as requiring the public-domain flag; it does not merely boost matches within all public-domain objects. Default page size stays small. The museum API allows anonymous access, but may throttle or block particular clients.
+- Opening Chicago records may come from the museum's [published API-data preview](https://github.com/art-institute-of-chicago/api-data) if the live API is unavailable during collection. Each such record preserves `retrievedFrom`, `sourceKind` and `sourceUpdatedAt`. The preview is a limited, potentially older publication; its fetch date does **not** claim current museum metadata. For IDs absent from that preview, a failed live fetch stops the refresh and preserves the last good collection.
+- Images load from the original museum servers only when the individual record explicitly marks them public domain. No image permission is inferred from age. Metadata-only records remain inspectable. Credit lines and source links stay with the works. [Met terms](https://www.metmuseum.org/policies/terms-and-conditions), [Chicago image licensing](https://www.artic.edu/image-licensing), [Chicago terms](https://www.artic.edu/terms).
+- Museum collection metadata used here is CC0. Chicago descriptions, which have separate attribution terms, are not included. This app is independent and does not imply museum endorsement.
+
+The century chart counts loaded objects by the midpoint of their date range. It is not a measure of historical art production, collection completeness or popularity. Date filters use ranges, not midpoint dates. Missing dates are excluded from the chart. Culture, nationality and place fields can reflect different catalogue conventions.
+
+## Privacy
+
+Museum searches send query text directly to the selected provider. Images load from museum hosts, which receive normal network information. Filters, selected comparisons and exports are processed in the browser. The app does not persist them in local storage or send them to CoolCode. The shared CoolCode visit counter and issue-report link are included by the builder.
+
+## Develop
+
+The build uses only Python's standard library; model tests and the optional collector require modern Node.js.
 
 ```sh
 node --test tests/*.test.mjs
 python3 -m unittest discover -s tests -v
 python3 scripts/build.py
-python3 -m http.server 8000 --directory dist
 ```
 
-Open `http://localhost:8000/`. The example trims lines, skips blanks and removes exact
-duplicates, preserving first-seen order and capitalization. It processes the text in tab memory. Update that explanation if your app behaves differently.
+`dist/` is generated and ignored. Application source lives under `web/`. The normal build is offline. GitHub Actions runs the browser smoke test after the unit/build checks, and publishes successful `main` builds to GitHub Pages. No CNAME or credentials are part of the app.
 
-CI also tests the browser flow and mobile layout at a project subpath. Replace the
-sample assertions in `tests/browser_smoke.py` when implementing your own UI. To run
-that check locally (optional for ordinary preview):
 
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python3 -m pip install -r tests/browser-requirements.txt
-python3 -m playwright install --with-deps chromium
-python3 tests/browser_smoke.py
-```
+## Verification notes
 
-Playwright is a test-only dependency; the app and its static build do not use it.
-
-## Publish and register
-
-When the actual tool is ready, in the **new tool repository** set **Settings → Pages → Build and deployment →
-Source → GitHub Actions**. Push to `main`, or manually run **Browser tool · Check and
-publish** after enabling Pages. If the initial deployment ran before Pages was enabled,
-enable it and rerun. PRs only check/build and provide a downloadable preview artifact.
-
-Keep `{{VISIT_COUNTER}}` in the page head and `{{ISSUE_LINK}}` in the footer when replacing the starter UI. The build enables these for initialized CoolCode repositories. The shared counter records aggregate opens on coolcode.ca by public tool ID. Toolbox inputs and URL parameters are excluded. The issue link opens a reporting form with the tool already selected.
-
-Keep app-owned asset paths and module imports relative. Check `https://coolcode.ca/my-tool/`.
-Do not add a CNAME or set `coolcode.ca` as this project's custom domain; the account
-site supplies it. Only successful `main` builds deploy.
-
-After verifying the app, copy the reviewed object from `tool.json` into `data/tools.json`
-in [the main site](https://github.com/jsdyer/jsdyer.github.io). Each tool still builds
-independently. Update the hub record when listing metadata changes; the hub is the
-authority for discovery. Ordinary app updates touch only this repository.
-
-The main site separates **Use in your browser** from **Install yourself**. An app
-that asks for a file is still a browser tool. Standalone Linux packages should start
-in their own repositories with their own build/release workflow, rather than copying
-this browser-only scaffold. Their hub record uses `access: "install"`, links to an
-installation guide, and includes `requirements`.
-
-## Files
-
-| Path | Purpose |
-| --- | --- |
-| `tool.json` | Page metadata and a ready-to-copy catalogue record |
-| `web/` | HTML, responsive CSS, DOM interactions and separate model logic |
-| `scripts/build.py` | Escape metadata and build `web/` into `dist/` |
-| `scripts/init.py` | Set a new project's identity |
-| `tests/` | Application and builder tests |
-| `.github/workflows/pages.yml` | Check PRs and publish successful main builds |
-| `AGENTS.md` | Instructions for future coding work |
-
-Namespace optional storage as `coolcode:<tool-id>:<key>`; CoolCode paths share a
-browser origin. Don't save pasted text/uploads by default. Document external APIs
-and send only the information needed for the selected action. Never embed secrets.
-
-Scheduled refresh is opt-in. Validate source data before deploying, display its date,
-and preserve the last good deployment on failure. Public-repository schedules can
-stop after 60 days without repository activity.
-
-Templates don't propagate future edits automatically. Adopt fixes explicitly and
-consider a versioned reusable workflow once several tools confirm the shared process.
-Choose and add the intended software license before distributing a new project.
+The opening records, comparisons, exports and Met live custom searches were checked in the browser. Chicago records and the matching live search query succeeded through the normal collector, but Chicago live search returned a network failure in the cloud browser used for this build, even after removing the optional preflight-triggering header. This does not establish a failure for every visitor. Chicago remains enabled; if a request fails, existing works remain usable and the page offers the same query on Chicago's own collection site. No proxy, authentication change or access-control workaround is used.

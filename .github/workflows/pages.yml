@@ -1,27 +1,40 @@
-name: Browser tool · Check and publish
+name: Art Timeline · Check and publish
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      refresh_data:
+        description: Refresh the opening collection from the configured artwork IDs
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: arttimeline-collection-${{ github.ref }}
+      cancel-in-progress: false
     timeout-minutes: 15
     outputs:
       publish: ${{ steps.identity.outputs.publish }}
     steps:
       - uses: actions/checkout@v6
         with:
-          persist-credentials: false
+          persist-credentials: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_data }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Refresh the opening collection
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_data
+        run: node scripts/refresh.mjs
       - name: Test the application
         run: node --test tests/*.test.mjs
       - name: Test the builder
@@ -46,6 +59,16 @@ jobs:
           python3 -m playwright install --with-deps chromium
       - name: Check application in a browser
         run: python3 tests/browser_smoke.py
+      - name: Commit validated opening collection
+        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.refresh_data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web/data/collection.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh museum opening collection'
+            git push
+          fi
       - name: Save browser screenshots
         if: always()
         uses: actions/upload-artifact@v4

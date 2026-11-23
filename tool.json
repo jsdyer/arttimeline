@@ -1,16 +1,16 @@
 {
-  "id": "coolcode-tool-template",
-  "title": "CoolCode Tool Starter",
-  "description": "A browser-only example that trims lines and removes exact duplicates.",
-  "category": "security",
-  "tags": ["text", "lines", "duplicates"],
-  "icon": "scan-search",
-  "url": "/coolcode-tool-template/",
-  "source": "https://github.com/jsdyer/coolcode-tool-template",
+  "id": "arttimeline",
+  "title": "Art Timeline",
+  "description": "Explore two museum collections through time and compare artworks, materials and original records.",
+  "category": "media",
+  "tags": ["art", "museums", "public domain", "timeline", "culture"],
+  "icon": "library-big",
+  "url": "/arttimeline/",
+  "source": "https://github.com/jsdyer/arttimeline",
   "hosting": "project",
   "access": "browser",
   "data_info": {
-    "mode": "local",
-    "detail": "The browser reads the text you paste and compares its lines."
+    "mode": "mixed",
+    "detail": "Search The Met and Art Institute of Chicago, with a dated opening collection and public-domain images."
   }
 }

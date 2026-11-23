@@ -1,21 +1,14 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { cleanLines } from '../web/model.mjs';
-test('trims, removes blanks and preserves first-seen order', () => {
-  assert.deepEqual(cleanLines('  Halifax\nLangley\nHalifax\n\nVancouver  '), {
-    text: 'Halifax\nLangley\nVancouver', count: 3, removed: 1,
-  });
-});
-test('supports Windows and old Mac line endings', () => {
-  assert.equal(cleanLines('a\r\nb\ra').text, 'a\nb');
-});
-test('empty text and whitespace produce an empty result', () => {
-  assert.deepEqual(cleanLines(' \n\t'), { text: '', count: 0, removed: 0 });
-});
-test('preserves case and Unicode', () => {
-  assert.equal(cleanLines('Québec\nquébec\n東京\nQuébec').text, 'Québec\nquébec\n東京');
-});
-test('treats markup as ordinary text', () => {
-  assert.equal(cleanLines('<script>alert(1)</script>\n<script>alert(1)</script>').text, '<script>alert(1)</script>');
-});
-test('rejects non-text input', () => { assert.throws(() => cleanLines(null), TypeError); });
+import test from 'node:test';import assert from 'node:assert/strict';
+import {normalizeMet,normalizeAic,filterRecords,centuryGroups,searchUrl,mergeRecords,toCsv,validateConfig} from '../web/model.mjs';
+const stamp='2026-01-01T00:00:00Z';
+const met={objectID:1,title:'One',isPublicDomain:true,primaryImage:'https://images.metmuseum.org/one.jpg',objectBeginDate:1880,objectEndDate:1890,objectDate:'1880–90',artistDisplayName:'Artist',objectURL:'https://www.metmuseum.org/art/collection/search/1'};
+const aic={id:1,title:'Other',is_public_domain:true,image_id:'abc-123',date_start:-500,date_end:-400};
+test('image URLs require explicit source public-domain flag and trusted image hosts',()=>{assert.equal(normalizeMet({...met,isPublicDomain:false},stamp).image,'');assert.equal(normalizeMet({...met,primaryImage:'https://evil.example/a'},stamp).image,'');assert.equal(normalizeAic({...aic,is_public_domain:false},stamp).image,'');assert.equal(normalizeAic({...aic,image_id:'../x'},stamp).image,'');assert.ok(normalizeMet(met,stamp).image);assert.ok(normalizeAic(aic,stamp).image);});
+test('missing dates remain unknown and invalid identities are rejected',()=>{assert.equal(normalizeAic({...aic,date_start:null},stamp).start,null);assert.throws(()=>normalizeMet({...met,objectID:'1'},stamp));});
+test('year filters retain overlapping ranges and omit unknown dates when bounded',()=>{const records=[normalizeMet(met,stamp),normalizeAic(aic,stamp),normalizeAic({...aic,id:2,date_start:null,date_end:null},stamp)];assert.equal(filterRecords(records,{start:1885,end:1886}).length,1);assert.equal(filterRecords(records,{start:-450,end:-450}).length,1);assert.equal(filterRecords(records).length,3);});
+test('refinement matches artists materials and places, and filters museums',()=>{const r=normalizeMet({...met,medium:'Oil on canvas'},stamp);assert.equal(filterRecords([r],{text:'OIL'}).length,1);assert.equal(filterRecords([r],{provider:'aic'}).length,0);});
+test('timeline counts both providers using midpoint, without invented dates',()=>{const groups=centuryGroups([normalizeMet(met,stamp),normalizeAic(aic,stamp)]);assert.deepEqual(groups,[{start:-500,met:0,aic:1},{start:1800,met:1,aic:0}]);});
+test('live queries and pagination are not constrained by preset list',()=>{const url=new URL(searchUrl('met','my new query & subject',3,17));assert.equal(url.pathname,'/public/collection/v1.1/search');assert.equal(url.searchParams.get('offset'),'34');assert.equal(url.searchParams.get('q'),'my new query & subject');const chicago=new URL(searchUrl('aic','telescope',2,25));const params=JSON.parse(chicago.searchParams.get('params'));assert.equal(params.page,2);assert.equal(params.query.bool.filter[0].term.is_public_domain,true);assert.equal(params.query.bool.must[0].multi_match.query,'telescope');assert.throws(()=>searchUrl('other','x',1,10));});
+test('arbitrarily expanded collections merge without a fixed item cap and separate museum IDs',()=>{const base=Array.from({length:30},(_,i)=>normalizeMet({...met,objectID:i+1},stamp));const out=mergeRecords(base,[normalizeMet({...met,objectID:31},stamp),normalizeAic(aic,stamp),base[0]]);assert.equal(out.length,32);assert.equal(filterRecords(out).length,32);});
+test('CSV retains source and escapes quotes and newlines',()=>{const csv=toCsv([normalizeMet({...met,title:'An "art",\nwork'},stamp)]);assert.ok(csv.includes('"An ""art"",\nwork"'));assert.ok(csv.includes('https://www.metmuseum.org/'));});
+test('configuration accepts additional preset queries and validates page size',()=>{const c={defaultQuery:'night',presets:['anything','else','more'],pageSize:17,requestTimeoutMs:10000,metDetailDelayMs:150,aicUserAgent:'app'};assert.equal(validateConfig(c).presets.length,3);assert.throws(()=>validateConfig({...c,pageSize:101}));});

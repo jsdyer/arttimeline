@@ -26,3 +26,5 @@
   the extra practical detail in the hub README. Only the short source sentence
   belongs in the homepage record. Import the note with `scripts/sync_guides.py
   --tool TOOL_ID` in the hub before regenerating its README.
+
+- Keep collection defaults and presets editable in `web/config.json`; never use them as a limit on live user searches. Derive UI counts from data, test expansion, and document exact customization and refresh steps in the README.

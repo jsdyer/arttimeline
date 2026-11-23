@@ -40,8 +40,47 @@ def metadata(root=ROOT):
     return tool
 
 
+def validate_collection(root=ROOT):
+    config = json.loads((root / "web/config.json").read_text())
+    if not isinstance(config.get("presets"), list) or not all(isinstance(x, str) and x.strip() for x in config["presets"]):
+        raise ValueError("presets must be a list of search strings")
+    if type(config.get("pageSize")) is not int or not 1 <= config["pageSize"] <= 100:
+        raise ValueError("pageSize must be between 1 and 100")
+    for field in ("metObjectIds", "aicObjectIds"):
+        ids = config.get("baseline", {}).get(field)
+        if not isinstance(ids, list) or not all(type(i) is int and i > 0 for i in ids) or len(set(ids)) != len(ids):
+            raise ValueError("Baseline artwork IDs must be positive and unique per provider")
+    capture = json.loads((root / "web/data/collection.json").read_text())
+    records = capture.get("records")
+    if not isinstance(records, list) or not records:
+        raise ValueError("Opening collection must contain records")
+    keys = set()
+    for record in records:
+        if record.get("provider") not in ("met", "aic") or type(record.get("id")) is not int or record["id"] <= 0:
+            raise ValueError("Invalid museum artwork identity")
+        if record.get("key") != f"{record['provider']}:{record['id']}" or record["key"] in keys:
+            raise ValueError("Duplicate or invalid museum artwork key")
+        keys.add(record["key"])
+        for field in ("title", "artist", "date", "source", "api", "retrievedAt"):
+            if not isinstance(record.get(field), str) or not record[field]:
+                raise ValueError(f"Missing artwork {field}")
+        for field in ("start", "end"):
+            if record.get(field) is not None and type(record[field]) is not int:
+                raise ValueError("Date bounds must be integer years or null")
+        for field in ("source", "api", "retrievedFrom"):
+            value = record.get(field)
+            if value and (urlsplit(value).scheme != "https" or urlsplit(value).username):
+                raise ValueError("Museum evidence URLs must be HTTPS")
+        if record.get("image"):
+            host = urlsplit(record["image"]).hostname
+            if record.get("publicDomain") is not True or host not in ("images.metmuseum.org", "www.artic.edu") or urlsplit(record["image"]).scheme != "https":
+                raise ValueError("Images require explicit public-domain status and a museum host")
+    return capture
+
+
 def build(root=ROOT):
     tool = metadata(root)
+    validate_collection(root)
     output = root / "dist"
     if output.is_symlink():
         raise ValueError("dist must not be a symlink")

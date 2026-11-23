@@ -1,0 +1,12 @@
+{
+  "defaultQuery": "landscape",
+  "pageSize": 12,
+  "requestTimeoutMs": 25000,
+  "metDetailDelayMs": 130,
+  "aicUserAgent": "CoolCode Art Timeline (jeffdyer@gmail.com)",
+  "presets": ["landscape", "moonlight", "botanical", "Japanese prints", "architecture", "portraits"],
+  "baseline": {
+    "metObjectIds": [436535, 436532, 437853, 45434, 436105, 437397, 437127, 437133],
+    "aicObjectIds": [4, 9, 11, 16, 19, 20, 22, 23]
+  }
+}

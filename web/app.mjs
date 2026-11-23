@@ -1,37 +1,34 @@
-import { cleanLines } from './model.mjs';
-const input = document.querySelector('#input');
-const output = document.querySelector('#output');
-const status = document.querySelector('#status');
-const copy = document.querySelector('#copy');
-function update() {
-  const result = cleanLines(input.value);
-  output.value = result.text;
-  status.textContent = `${result.count} unique ${result.count === 1 ? 'line' : 'lines'}; ${result.removed} ${result.removed === 1 ? 'duplicate' : 'duplicates'} removed.`;
-  copy.disabled = result.count === 0;
-}
-input.addEventListener('input', update);
-document.querySelector('#sample').addEventListener('click', () => {
-  input.value = '  Halifax\nLangley\nHalifax\n\nVancouver  ';
-  update();
-});
-document.querySelector('#clear').addEventListener('click', () => {
-  input.value = '';
-  update();
-  input.focus();
-});
-if (navigator.clipboard && window.isSecureContext) {
-  copy.hidden = false;
-  copy.disabled = true;
-  copy.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(output.value);
-      status.textContent = 'Result copied.';
-    } catch {
-      output.focus();
-      output.select();
-      status.textContent = 'Copy was unavailable. The result is selected so you can copy it manually.';
-    }
-  });
-}
-// Namespace future preference storage as coolcode:<tool-id>:<key>.
-// Do not persist pasted text or uploads by default.
+import {PROVIDERS,normalizeMet,normalizeAic,validateConfig,searchUrl,filterRecords,centuryGroups,formatYear,mergeRecords,toCsv} from './model.mjs';
+const $=id=>document.getElementById(id);
+const el=(tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;};
+let config,baseline,records=[],visible=[],selected=[],activeQuery='',pages={met:0,aic:0},totals={},busy=false,searching=false,searchProviders=[];
+const detailCache=new Map();
+function status(message){$('status').textContent=message;}
+function setBusy(value){busy=value;$('search-submit').disabled=value;$('load-more').disabled=value;$('reset').disabled=value;for(const b of $('presets').querySelectorAll('button'))b.disabled=value;}
+// Keep browser requests as ordinary CORS GETs. Chicago's optional contact header
+// causes a preflight that its edge currently challenges; collectors still identify themselves.
+async function request(url,provider){const response=await fetch(url,{credentials:'omit',signal:AbortSignal.timeout(config.requestTimeoutMs)});if(!response.ok)throw new Error(`HTTP ${response.status}${response.status===429?' · museum request limit reached':''}`);return response.json();}
+function imageNode(record,className='art-image'){const wrap=el('div',undefined,className);if(record.image){const img=el('img');img.src=record.image;img.alt=record.title;img.loading='lazy';img.referrerPolicy='no-referrer';img.addEventListener('error',()=>{img.remove();wrap.append(el('p','Image unavailable. Open the museum record to view it.','missing'));},{once:true});wrap.append(img);}else wrap.append(el('p',record.publicDomain?'No open image supplied':'Museum record · image not marked public domain','missing'));return wrap;}
+function link(text,url){const a=el('a',text);a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
+function metadata(record){const dl=el('dl',undefined,'metadata');for(const [label,value] of [['Artist',record.artist],['Date',record.date],['Material',record.medium],['Place / culture',record.place],['Collection',PROVIDERS[record.provider]],['Dimensions',record.dimensions||'Not recorded'],['Accession',record.accession||String(record.id)],['Image rights',record.publicDomain?'Marked public domain by museum':'Not marked public domain'],['Credit',record.credit||'See museum record'],['Record source',record.sourceKind||'Live museum API'],['Retrieved',new Date(record.retrievedAt).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})]])dl.append(el('dt',label),el('dd',value));return dl;}
+function sourceLinks(record){const p=el('div',undefined,'source-links');p.append(link('Original museum record',record.source),link('Source API record',record.api));if(record.retrievedFrom&&record.retrievedFrom!==record.api)p.append(link('Captured metadata source',record.retrievedFrom));return p;}
+function inspect(record){const body=$('detail-body');body.replaceChildren();const layout=el('div',undefined,'detail-layout');const copy=el('div');copy.append(el('p',PROVIDERS[record.provider],'museum'),el('h2',record.title),metadata(record),sourceLinks(record));layout.append(imageNode(record),copy);body.append(layout);$('detail').showModal();}
+function toggleCompare(record){const index=selected.findIndex(r=>r.key===record.key);if(index>=0)selected.splice(index,1);else{if(selected.length===2)selected.shift();selected.push(record);}renderComparison();renderGallery();}
+function renderComparison(){const grid=$('compare-grid');grid.replaceChildren();for(let i=0;i<2;i++){const r=selected[i];if(!r){grid.append(el('div',`Choose ${i===0?'a work':'another work'} to compare`,'compare-empty'));continue;}const card=el('article',undefined,'compare-item');const remove=el('button','Remove','quiet');remove.addEventListener('click',()=>toggleCompare(r));card.append(imageNode(r),el('h3',r.title),metadata(r),sourceLinks(r),el('div',undefined,'link-row'));card.lastChild.append(remove);grid.append(card);}$('export-json').disabled=!selected.length;}
+function renderGallery(){const grid=$('gallery');grid.replaceChildren();if(!visible.length){grid.append(el('p','No loaded works match these filters. Try a wider date range, clear the text filter, or search the museums for a new subject.','empty'));return;}for(const r of visible){const card=el('article',undefined,'art-card');const copy=el('div',undefined,'card-info');const buttons=el('div',undefined,'card-buttons');const detail=el('button','Inspect work','quiet');detail.addEventListener('click',()=>inspect(r));const picked=selected.some(x=>x.key===r.key);const compare=el('button',picked?'In comparison':'Compare',picked?'selected':'quiet');compare.setAttribute('aria-pressed',String(picked));compare.setAttribute('aria-label',`${picked?'Remove':'Compare'} ${r.title}`);compare.addEventListener('click',()=>toggleCompare(r));buttons.append(detail,compare);copy.append(el('p',r.provider==='met'?'The Met':'Art Institute of Chicago','museum'),el('h3',r.title),el('p',r.artist,'artist'),el('p',r.date,'date'),el('p',r.medium,'material'),buttons,el('p',`${r.publicDomain?'Public domain · ':''}${r.credit||'Credit: see museum record'}`,'credit'));card.append(imageNode(r),copy);grid.append(card);}}
+function renderTimeline(){const grid=$('timeline');grid.replaceChildren();const groups=centuryGroups(visible),max=Math.max(1,...groups.map(g=>Math.max(g.met,g.aic)));if(!groups.length){grid.append(el('p','No dated works in the current view.','fine'));return;}for(const g of groups){const bin=el('div',undefined,'time-bin');bin.title=`${formatYear(g.start)} to ${formatYear(g.start+99)}: ${g.met} Met, ${g.aic} Chicago`;const bars=el('div',undefined,'time-bars');for(const p of ['met','aic']){const b=el('span',undefined,p);b.style.height=`${g[p]/max*48}px`;b.setAttribute('aria-label',`${PROVIDERS[p]}: ${g[p]}`);bars.append(b);}bin.append(bars,el('small',formatYear(g.start)));grid.append(bin);}}
+function render(){const start=$('year-start').value===''?null:Number($('year-start').value),end=$('year-end').value===''?null:Number($('year-end').value);if(start!==null&&end!==null&&start>end){status('The from year must be no later than the to year.');return;}visible=filterRecords(records,{provider:$('provider').value,text:$('filter-text').value,start,end,sort:$('sort').value});$('result-count').textContent=`${visible.length} works${visible.length!==records.length?` of ${records.length} loaded`:''}`;renderTimeline();renderGallery();$('export-csv').disabled=!visible.length;}
+function resetFilters(){for(const id of ['filter-text','year-start','year-end'])$(id).value='';$('provider').value='all';$('sort').value='oldest';}
+function opening(){searching=false;activeQuery='';records=[...baseline.records];resetFilters();$('load-more').hidden=true;$('coverage').textContent='Opening collection · configurable selection, not a complete museum catalogue';status(`Opening collection: ${records.length} works · metadata retrieved ${new Date(baseline.retrievedAt).toLocaleDateString()}. Search to explore beyond this selection.`);render();}
+async function fetchProvider(provider){const next=pages[provider]+1;const limit=provider==='aic'?1000:10000;if((next-1)*config.pageSize>=limit)return {provider,added:[],note:`${PROVIDERS[provider]} search paging limit reached; narrow the query.`};const url=searchUrl(provider,activeQuery,next,config.pageSize);const raw=await request(url,provider),stamp=new Date().toISOString();let added=[],failed=0;
+ if(provider==='met'){if(!Number.isInteger(raw.total)||!(raw.objectIDs===null||Array.isArray(raw.objectIDs)))throw new Error('Unexpected search response');totals.met=raw.total;for(const id of raw.objectIDs||[]){try{let record=detailCache.get(id);if(!record){record=normalizeMet(await request(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`,'met'),stamp);detailCache.set(id,record);await new Promise(r=>setTimeout(r,config.metDetailDelayMs));}added.push(record);}catch{failed++;}}}
+ else {if(!Array.isArray(raw.data)||!Number.isInteger(raw.pagination?.total))throw new Error('Unexpected search response');totals.aic=raw.pagination.total;added=raw.data.map(r=>normalizeAic(r,stamp));}
+ pages[provider]=next;return {provider,added,note:`${provider==='met'?'The Met':'Chicago'}: ${totals[provider].toLocaleString()} matches${failed?`; ${failed} object details unavailable`:''}`};}
+function activeProviders(){return $('search-provider').value==='all'?['met','aic']:[$('search-provider').value];}
+async function search(more=false){if(busy)return;const query=$('query').value.trim();if(!more&&!query)return;setBusy(true);if(!more){activeQuery=query;searchProviders=activeProviders();pages={met:0,aic:0};totals={};}status(`Searching for “${activeQuery}”… Museum records may take a moment to arrive.`);const outcomes=[];const failures=[];for(const provider of searchProviders){if(more&&totals[provider]!==undefined&&pages[provider]*config.pageSize>=Math.min(totals[provider],provider==='aic'?1000:10000))continue;try{outcomes.push(await fetchProvider(provider));}catch(error){failures.push({provider,message:`Could not reach ${PROVIDERS[provider]} from this browser (${error.name==='TimeoutError'?'request timed out':error.message})`});}}
+ const got=outcomes.flatMap(x=>x.added);if(outcomes.length){records=more?mergeRecords(records,got):mergeRecords([],got);searching=true;if(!more)resetFilters();render();$('coverage').textContent=`Search “${activeQuery}” · ${records.length} loaded records. ${outcomes.map(x=>x.note).join(' · ')}. Load more to expand this view.`;status(`${outcomes.map(x=>x.note).join(' · ')}${failures.length?' · '+failures.map(f=>f.message).join(' · '):''}. ${records.length} works loaded.`);}else status(`${failures.map(f=>f.message).join(' · ')}. Saved and previously loaded works remain available below. You can search the museum directly or try the other museum.`);
+ if(failures.some(f=>f.provider==='aic')){const native=new URL('https://www.artic.edu/collection');native.searchParams.set('q',activeQuery);$('status').append(' ',link(`Search Chicago directly for “${activeQuery}”`,native.href));}
+ $('load-more').hidden=!searching||!searchProviders.some(p=>totals[p]===undefined||pages[p]*config.pageSize<Math.min(totals[p],p==='aic'?1000:10000));setBusy(false);}
+function download(data,type,name){const url=URL.createObjectURL(new Blob([data],{type}));const a=el('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+$('search-form').addEventListener('submit',e=>{e.preventDefault();search();});$('load-more').addEventListener('click',()=>search(true));$('reset').addEventListener('click',opening);for(const id of ['filter-text','provider','year-start','year-end','sort'])$(id).addEventListener('input',render);$('close-detail').addEventListener('click',()=>$('detail').close());$('detail').addEventListener('click',e=>{if(e.target===$('detail'))$('detail').close();});$('export-csv').addEventListener('click',()=>download(toCsv(visible),'text/csv;charset=utf-8','art-timeline.csv'));$('export-json').addEventListener('click',()=>download(JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),records:selected},null,2),'application/json','art-timeline-comparison.json'));
+try{const responses=await Promise.all([fetch('./config.json'),fetch('./data/collection.json')]);if(responses.some(r=>!r.ok))throw new Error('Collection files unavailable');config=validateConfig(await responses[0].json());baseline=await responses[1].json();if(!Array.isArray(baseline.records)||!baseline.records.length)throw new Error('Opening collection is empty');$('query').value=config.defaultQuery;for(const q of config.presets){const b=el('button',q);b.type='button';b.addEventListener('click',()=>{$('query').value=q;search();});$('presets').append(b);}const hero=baseline.records.find(r=>r.key==='met:436535'&&r.image)||baseline.records.find(r=>r.image);if(hero){$('hero-image').replaceChildren(imageNode(hero).firstChild);$('hero-caption').textContent=`${hero.title} · ${hero.artist} · ${hero.date}. ${hero.credit}. ${PROVIDERS[hero.provider]} · Public domain.`;}opening();renderComparison();}catch(error){status(`Unable to load the collection: ${error.message}. Reload the page to retry.`);}
