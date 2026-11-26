@@ -25,16 +25,28 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          persist-credentials: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_data }}
+          persist-credentials: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Check expanded collection
+        id: collection
+        run: |
+          python3 - <<'PYCODE'
+          import json,os
+          ready=json.load(open('web/data/collection.json')).get('expandedSchemaVersion')==1
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write(f'ready={str(ready).lower()}\n')
+          PYCODE
       - name: Refresh the opening collection
         if: github.event_name == 'workflow_dispatch' && inputs.refresh_data
         run: node scripts/refresh.mjs
+      - name: Extend and verify open-museum selection
+        id: enrich
+        if: (github.event_name == 'workflow_dispatch' && inputs.refresh_data) || (github.event_name == 'push' && steps.collection.outputs.ready != 'true')
+        run: python3 scripts/enrich.py
       - name: Test the application
         run: node --test tests/*.test.mjs
       - name: Test the builder
@@ -60,7 +72,7 @@ jobs:
       - name: Check application in a browser
         run: python3 tests/browser_smoke.py
       - name: Commit validated opening collection
-        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.refresh_data
+        if: github.ref == 'refs/heads/main' && steps.enrich.outcome == 'success'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

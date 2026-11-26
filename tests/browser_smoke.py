@@ -39,6 +39,12 @@ def main():
                 assert download.value.suggested_filename=='art-timeline-comparison.json'
                 page.locator('#provider').select_option('aic')
                 assert page.locator('.art-card').count()==sum(r['provider']=='aic' for r in fixture['records'])
+                page.locator('#provider').select_option('nga')
+                assert page.locator('.art-card').count()==sum(r['provider']=='nga' for r in fixture['records'])
+                page.locator('.card-buttons button').first.click()
+                assert 'Print at 300 PPI' in page.locator('#detail-body').inner_text()
+                assert page.locator('#detail-body a').filter(has_text='Open full-size image').count()==1
+                page.locator('#close-detail').click()
                 page.locator('#reset').click()
                 # Arbitrary live query route proves no preset-only lookup; unsafe titles render as text.
                 page.route('**/public/collection/v1.1/search?*',lambda route:route.fulfill(json={'total':1,'objectIDs':[999999]}))

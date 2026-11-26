@@ -4,9 +4,79 @@
   "requestTimeoutMs": 25000,
   "metDetailDelayMs": 130,
   "aicUserAgent": "CoolCode Art Timeline (jeffdyer@gmail.com)",
-  "presets": ["landscape", "moonlight", "botanical", "Japanese prints", "architecture", "portraits"],
+  "presets": [
+    "landscape",
+    "moonlight",
+    "botanical",
+    "Japanese prints",
+    "architecture",
+    "portraits"
+  ],
   "baseline": {
-    "metObjectIds": [436535, 436532, 437853, 45434, 436105, 437397, 437127, 437133],
-    "aicObjectIds": [4, 9, 11, 16, 19, 20, 22, 23]
+    "metObjectIds": [
+      436535,
+      436532,
+      437853,
+      45434,
+      436105,
+      437397,
+      437127,
+      437133
+    ],
+    "aicObjectIds": [
+      4,
+      9,
+      11,
+      16,
+      19,
+      20,
+      22,
+      23
+    ],
+    "cmaObjectIds": [
+      74228,
+      107054,
+      95272,
+      125234,
+      95377,
+      95381,
+      95368,
+      97306,
+      104204,
+      104205,
+      101646,
+      121035,
+      95263,
+      97721,
+      104116,
+      104119,
+      86498,
+      101628,
+      104793,
+      106088,
+      146909
+    ],
+    "ngaObjectIds": [
+      0,
+      5,
+      13,
+      45872,
+      46523,
+      1065,
+      1066,
+      116,
+      117,
+      79,
+      80,
+      10717,
+      39823,
+      11331,
+      30228,
+      1157,
+      1158
+    ],
+    "gettyObjectIds": [
+      "c88b3df0-de91-4f5b-a9ef-7b2b9a6d8abb"
+    ]
   }
 }

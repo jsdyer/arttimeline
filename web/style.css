@@ -5,3 +5,5 @@
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 
 .related{max-width:1260px;margin:0 auto 35px;padding:0 5%;font-size:14px;color:#526e63;line-height:1.8}
+
+.legend.cma,.time-bars .cma{background:#b27340}.legend.nga,.time-bars .nga{background:#7f629a}.legend.getty,.time-bars .getty{background:#558ca6}.timeline-heading p{max-width:65%;line-height:1.8}.time-bars{gap:2px}.metadata dd{overflow-wrap:anywhere}

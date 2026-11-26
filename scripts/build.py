@@ -46,9 +46,9 @@ def validate_collection(root=ROOT):
         raise ValueError("presets must be a list of search strings")
     if type(config.get("pageSize")) is not int or not 1 <= config["pageSize"] <= 100:
         raise ValueError("pageSize must be between 1 and 100")
-    for field in ("metObjectIds", "aicObjectIds"):
+    for field in ("metObjectIds", "aicObjectIds", "cmaObjectIds", "ngaObjectIds"):
         ids = config.get("baseline", {}).get(field)
-        if not isinstance(ids, list) or not all(type(i) is int and i > 0 for i in ids) or len(set(ids)) != len(ids):
+        if not isinstance(ids, list) or not all(type(i) is int and i >= (0 if field=="ngaObjectIds" else 1) for i in ids) or len(set(ids)) != len(ids):
             raise ValueError("Baseline artwork IDs must be positive and unique per provider")
     capture = json.loads((root / "web/data/collection.json").read_text())
     records = capture.get("records")
@@ -56,7 +56,7 @@ def validate_collection(root=ROOT):
         raise ValueError("Opening collection must contain records")
     keys = set()
     for record in records:
-        if record.get("provider") not in ("met", "aic") or type(record.get("id")) is not int or record["id"] <= 0:
+        if record.get("provider") not in ("met", "aic", "cma", "nga", "getty") or (record["provider"]=="getty" and not re.fullmatch(r"[a-f0-9-]{36}",str(record.get("id")))) or (record["provider"]!="getty" and (type(record.get("id")) is not int or record["id"] < (0 if record["provider"]=="nga" else 1))):
             raise ValueError("Invalid museum artwork identity")
         if record.get("key") != f"{record['provider']}:{record['id']}" or record["key"] in keys:
             raise ValueError("Duplicate or invalid museum artwork key")
@@ -73,8 +73,12 @@ def validate_collection(root=ROOT):
                 raise ValueError("Museum evidence URLs must be HTTPS")
         if record.get("image"):
             host = urlsplit(record["image"]).hostname
-            if record.get("publicDomain") is not True or host not in ("images.metmuseum.org", "www.artic.edu") or urlsplit(record["image"]).scheme != "https":
+            if record.get("publicDomain") is not True or host not in ("images.metmuseum.org", "www.artic.edu", "openaccess-cdn.clevelandart.org", "api.nga.gov", "media.getty.edu") or urlsplit(record["image"]).scheme != "https":
                 raise ValueError("Images require explicit public-domain status and a museum host")
+        pixel=record.get('pixelSize')
+        if pixel:
+            if not record.get('publicDomain') or not all(type(pixel.get(k)) is int and 0<pixel[k]<=100000 for k in ['width','height']) or urlsplit(pixel.get('url','')).hostname not in ('openaccess-cdn.clevelandart.org','api.nga.gov','media.getty.edu','images.metmuseum.org','www.artic.edu') or urlsplit(pixel['url']).scheme!='https':
+                raise ValueError('Print estimates require real pixel dimensions and an approved open-image URL')
     return capture
 
 

@@ -1,9 +1,15 @@
 {
   "id": "arttimeline",
   "title": "Art Timeline",
-  "description": "Explore two museum collections through time and compare artworks, materials and original records.",
+  "description": "Explore five museum collections through time, compare art and materials, and size open images for printing.",
   "category": "media",
-  "tags": ["art", "museums", "public domain", "timeline", "culture"],
+  "tags": [
+    "art",
+    "museums",
+    "public domain",
+    "timeline",
+    "culture"
+  ],
   "icon": "library-big",
   "url": "/arttimeline/",
   "source": "https://github.com/jsdyer/arttimeline",
@@ -11,6 +17,6 @@
   "access": "browser",
   "data_info": {
     "mode": "mixed",
-    "detail": "Search The Met and Art Institute of Chicago, with a dated opening collection and public-domain images."
+    "detail": "Live Met, Chicago and Cleveland searches plus dated NGA and Getty selections with individual image rights."
   }
 }
